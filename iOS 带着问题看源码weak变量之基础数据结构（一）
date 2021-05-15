@@ -25,7 +25,7 @@
 |weak_referrer_t | 1本书 | |
 
 
-![图片](http://bos.bj.bce-internal.sdns.baidu.com/agroup-bos-bj/bj-b87a81af3a9ae7842d8ed1efb912c6a4d13fb11b)
+![图片]()
 
 **这里看到的都是数组形态，但都是将对象的地址hash成index, 来取值，所以每一个都是一个hash表。**
 
@@ -46,7 +46,7 @@ SideTable *newTable = &SideTables()[obj];
 ```
 
 SideTablesMap的初始化
-![图片](http://bos.bj.bce-internal.sdns.baidu.com/agroup-bos-bj/bj-5f7202fa360c42b0743ddffb0b796f353dfd9699)
+![图片]()
 ```objective-c
 // NSObject.mm
 // runtime初始化时（_objc_init），会调用这里
