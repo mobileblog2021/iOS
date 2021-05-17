@@ -1,7 +1,8 @@
+
 # iOS 带着问题看源码weak变量的销毁（三）
 ❓❓❓：超出作用域，weak变量会怎么处理？;
 
-![图片]()
+![图片](https://user-images.githubusercontent.com/84235579/118441111-46842f00-b71b-11eb-94d9-6aa5e189748b.png)
 
 接上文，我们知道
 ```objective-c
