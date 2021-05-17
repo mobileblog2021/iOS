@@ -2,10 +2,10 @@
 
 ❓❓❓：weak变量是怎么添加到weak表中的？
 前情概要：
-![图片]()
+![图片](https://github.com/mobileblog2021/iOS/blob/main/runtime%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E4%B9%8Bweak/img/bj-5f7202fa360c42b0743ddffb0b796f353dfd9699.png?raw=true)
 
 weak变量的存储过程：
-![图片]()
+![图片](https://github.com/mobileblog2021/iOS/blob/main/runtime%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E4%B9%8Bweak/img/bj-812290df3ff62e86834788faef9fedf1d25621b8.png?raw=true)
 
 ```objective-c
 int main(int argc, const char * argv[]) {
