@@ -1,0 +1,212 @@
+# iOS 带着问题看源码之对象Dealloc过程 weak变量的特点 （四）
+
+❓❓❓：什么场景下必须用__unsafe_unretained,  却不能使用weak?
+
+我们可以利用关联属性的特性(对象释放时，其关联属性也会释放)，实现在分类中自动移除KVO。参见如下代码
+```objective-c
+@interface LTKVOInfo : NSObject
+@property (nonatomic, weak) NSObject *target;
+@property (nonatomic, unsafe_unretained) NSObject *unsafeTarget;
+@property (nonatomic, copy) NSString *keyPath;
+@end
+
+@implementation LTKVOInfo
+
+#pragma mark - KVO
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    // do sth
+}
+
+- (void)dealloc {
+    NSLog(@"lt_%@", _target);
+    NSLog(@"lt_%@", _unsafeTarget);
+    [_target removeObserver:self forKeyPath:_keyPath];
+}
+@end
+
+@implementation NSObject (BBAKVO)
+
+- (void)lt_observe:(NSObject *)observedObject forKeyPath:(NSString *)keyPath {
+    LTKVOInfo *info = [LTKVOInfo new];
+    info.target = observedObject;
+    info.keyPath = keyPath;
+    // 给辅助类添加KVO
+    [self addObserver:info forKeyPath:keyPath options:(NSKeyValueObservingOptionNew) context:nil];
+    
+    // 将辅助类添加到关联属性
+    objc_setAssociatedObject(self, _cmd, info, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+@end
+
+```
+会发现在辅助类LTKVOInfo中target的属性声明是unsafe_unretained？Why？使用weak可以吗？
+
+改成weak后，在iOS10系统上，就crash了
+
+```objective-c
+Thread 1: "An instance 0x7fa3bb800f70 of class TestView was deallocated while key value observers were still registered with it. Current observation info: <NSKeyValueObservationInfo 0x61000002f900> (\n<NSKeyValueObservance 0x61000005f650: Observer: 0x61000002f9e0, Key path: frame, Options: <New: YES, Old: NO, Prior: NO> Context: 0x0, Property: 0x61000005f410>\n)"
+```
+![图片](http://bos.bj.bce-internal.sdns.baidu.com/agroup-bos-bj/bj-2a64869b2cfcad29f882b08f8bf96c1b74ff1790)
+##### 我们先看看输出的结果是否符合预期
+- 1、NSLog输出_target为空
+- 2、NSLog输出_unsafeTaget 不为空
+- 3、重写了_target`- (void)removeObserver:(NSObject *)observer forKeyPath:(NSString *)keyPath`方法，并不会执行
+- 4、控制台`po _target`不为空
+- 5、控制台`po _unsafeTarget`不为空
+
+1、3、4的结果有点冲突，在LTKVOInfo dealloc时，weak变量_target到底是空还是非空呢？
+![图片](http://bos.bj.bce-internal.sdns.baidu.com/agroup-bos-bj/bj-8e08618a8a677fcb3e9af022e3f6f8c40dc5af02)
+我们用memory read去查看_target地址中的内容，确实是有值的，所以_target不为空。
+
+我们知道我们的代码会经过编译器二次处理，那来看看处理成了什么个样子
+```objective-c
+define internal void @"\01-[LTKVOInfo dealloc]"(%0* %0, i8* %1) #1 {
+  %3 = alloca %0*, align 8
+  %4 = alloca i8*, align 8
+  %5 = alloca %struct._objc_super, align 8
+  store %0* %0, %0** %3, align 8
+  store i8* %1, i8** %4, align 8
+  %6 = load %0*, %0** %3, align 8
+  %7 = bitcast %0* %6 to i8*
+  %8 = getelementptr inbounds i8, i8* %7, i64 8
+  %9 = bitcast i8* %8 to %3**
+  %10 = bitcast %3** %9 to i8**
+  // ⛵⛵⛵ 通过loadWeakRetained加载weak变量后，再执行NSLog
+  %11 = call i8* @llvm.objc.loadWeakRetained(i8** %10) #2
+  %12 = bitcast i8* %11 to %3*
+  notail call void (i8*, ...) @NSLog(i8* bitcast (%struct.__NSConstantString_tag* @_unnamed_cfstring_ to i8*), %3* %12)
+  %13 = bitcast %3* %12 to i8*
+  call void @llvm.objc.release(i8* %13) #2, !clang.imprecise_release !9
+  %14 = load %0*, %0** %3, align 8
+  %15 = bitcast %0* %14 to i8*
+  %16 = getelementptr inbounds i8, i8* %15, i64 24
+  %17 = bitcast i8* %16 to %3**
+  // ⛵⛵⛵ unsafe_unretained则是直接load
+  %18 = load %3*, %3** %17, align 8
+  notail call void (i8*, ...) @NSLog(i8* bitcast (%struct.__NSConstantString_tag* @_unnamed_cfstring_ to i8*), %3* %18)
+  %19 = load %0*, %0** %3, align 8
+  %20 = bitcast %0* %19 to i8*
+  %21 = getelementptr inbounds i8, i8* %20, i64 8
+  %22 = bitcast i8* %21 to %3**
+  %23 = bitcast %3** %22 to i8**
+  %24 = call i8* @llvm.objc.loadWeakRetained(i8** %23) #2
+  %25 = bitcast i8* %24 to %3*
+  %26 = load %0*, %0** %3, align 8
+  %27 = bitcast %0* %26 to %4*
+  %28 = load %0*, %0** %3, align 8
+  %29 = bitcast %0* %28 to i8*
+  %30 = getelementptr inbounds i8, i8* %29, i64 16
+  %31 = bitcast i8* %30 to %1**
+  %32 = load %1*, %1** %31, align 8
+  %33 = load i8*, i8** @OBJC_SELECTOR_REFERENCES_, align 8, !invariant.load !9
+  %34 = bitcast %3* %25 to i8*
+  call void bitcast (i8* (i8*, i8*, ...)* @objc_msgSend to void (i8*, i8*, %4*, %1*)*)(i8* %34, i8* %33, %4* %27, %1* %32)
+  %35 = bitcast %3* %25 to i8*
+  call void @llvm.objc.release(i8* %35) #2, !clang.imprecise_release !9
+  %36 = load %0*, %0** %3, align 8
+  %37 = bitcast %0* %36 to i8*
+  %38 = getelementptr inbounds %struct._objc_super, %struct._objc_super* %5, i32 0, i32 0
+  store i8* %37, i8** %38, align 8
+  %39 = load %struct._class_t*, %struct._class_t** @"OBJC_CLASSLIST_SUP_REFS_$_", align 8
+  %40 = bitcast %struct._class_t* %39 to i8*
+  %41 = getelementptr inbounds %struct._objc_super, %struct._objc_super* %5, i32 0, i32 1
+  store i8* %40, i8** %41, align 8
+  %42 = load i8*, i8** @OBJC_SELECTOR_REFERENCES_.2, align 8, !invariant.load !9
+  call void bitcast (i8* (%struct._objc_super*, i8*, ...)* @objc_msgSendSuper2 to void (%struct._objc_super*, i8*)*)(%struct._objc_super* %5, i8* %42)
+  ret void
+}
+```
+
+我们再去看loadWeakRetained的实现
+```objective-c
+id
+objc_loadWeakRetained(id *location)
+{
+    id obj;
+    id result;
+    Class cls;
+
+    SideTable *table;
+    
+ retry:
+    // fixme std::atomic this load
+    obj = *location;
+    if (obj->isTaggedPointerOrNil()) return obj;
+    
+    table = &SideTables()[obj];
+    
+    table->lock();
+    if (*location != obj) {
+        table->unlock();
+        goto retry;
+    }
+    
+    result = obj;
+
+    cls = obj->ISA();
+    if (! cls->hasCustomRR()) {
+        // Fast case. We know +initialize is complete because
+        // default-RR can never be set before then.
+        ASSERT(cls->isInitialized());
+        // ⛵⛵⛵ try retain
+        if (! obj->rootTryRetain()) {
+            result = nil;
+        }
+    }
+    else {
+      // hasCustomRR 的场景处理
+    }
+    table->unlock();
+    return result;
+}
+
+ALWAYS_INLINE bool 
+objc_object::rootTryRetain()
+{
+    return rootRetain(true, RRVariant::Fast) ? true : false;
+}
+
+ALWAYS_INLINE id
+objc_object::rootRetain(bool tryRetain, objc_object::RRVariant variant)
+{
+    // 略 sth not important
+    oldisa = LoadExclusive(&isa.bits);
+    newisa = oldisa;
+    // ⛵⛵⛵ 当对象正在dealloc时 isDeallocating() = extra_rc == 0 && has_sidetable_rc == 0;
+    // ⛵⛵⛵ 返回nil
+    if (slowpath(newisa.isDeallocating())) {
+            ClearExclusive(&isa.bits);
+            if (sideTableLocked) {
+                ASSERT(variant == RRVariant::Full);
+                sidetable_unlock();
+            }
+            if (slowpath(tryRetain)) {
+                return nil;
+            } else {
+                return (id)this;
+            }
+      }
+      // 略 sth not important
+}
+```
+即loadWeakRetained在对象正在释放时，会返回nil;
+
+```objective-c
+- (void)dealloc {
+    [_target removeObserver:self forKeyPath:_keyPath];
+}
+// 编译后
+- (void)dealloc {
+    [objc_loadWeakRetained(_target) removeObserver:self forKeyPath:_keyPath];
+}
+```
+而使用__unsafe_unretained则会直接使用_target调用 removeObserver；这也就解释了为什么在控制台输出时有值，运行时确为空的现象了。
+
+结论：即当对象正在释放时，指向它weak变量虽然还没有被置空，但依旧不能访问。
+
+ weak的特点，在对象销毁的时候（包括正在销毁中的对象），指向该对象所有的weak指针都会置为nil
+
+**扩展**：这里使用__unsafe_unretained, 不怕出现野指针吗？
+极限一下，如果使用_unsafe_unretaied指向一个单例，则永远不会出现野指针。同样一个对象的生命周期是另外一个对象生命周期的范围之内，即对象A作为对象B的属性，对象A存在时，对象B一定存在，则不会出现野指针。
+
