@@ -25,7 +25,7 @@
 |weak_referrer_t | 1本书 | |
 
 
-![图片](https://github.com/mobileblog2021/iOS/blob/main/runtime%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E4%B9%8Bweak/img/bj-b87a81af3a9ae7842d8ed1efb912c6a4d13fb11b.png?raw=true)
+![图片](./img/bj-b87a81af3a9ae7842d8ed1efb912c6a4d13fb11b.png?raw=true)
 
 **这里看到的都是数组形态，但都是将对象的地址hash成index, 来取值，所以每一个都是一个hash表。**
 
@@ -46,7 +46,7 @@ SideTable *newTable = &SideTables()[obj];
 ```
 
 SideTablesMap的初始化
-![图片](https://github.com/mobileblog2021/iOS/blob/main/runtime%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%E4%B9%8Bweak/img/bj-5f7202fa360c42b0743ddffb0b796f353dfd9699.png?raw=true)
+![图片](./img/bj-5f7202fa360c42b0743ddffb0b796f353dfd9699.png?raw=true)
 ```objective-c
 // NSObject.mm
 // runtime初始化时（_objc_init），会调用这里
